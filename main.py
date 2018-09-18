@@ -119,24 +119,30 @@ def keyword_handler():
     led_cond.notify()
 
     print("keyword handler called")
-<<<<<<< HEAD
-    #snowboydecoder.play_audio_file()
-    raw_text_cmd = get_command()
-    cmds = nlp.parse_phrase(raw_text_cmd)
-    print(cmds)
-    for cmd in cmds:
-        commands.execute_command(cmd)
-=======
 
-    # the color is green, initially
-    color = (0, 255, 0)
+    num_cmds = 0
+    successes = 0
     try:
         cmds = get_cmds()
+        num_cmds = len(cmds)
         for cmd in cmds:
-            commands.execute_command(cmd)
+            success = commands.execute_command(cmd)
+            if success:
+                successes = successes + 1
     except:
-        # if there's a problem, the color is red
+        # if there's a problem with the parsing, it's an automatic failure
+        result = "failure"
+
+    # flash red if we failed
+    if successes == 0:
         color = (255, 0, 0)
+    else:
+        # flash green if we succeeded
+        if successes == num_cmds:
+            color = (0, 255, 0)
+        else:
+            # flash yellow for a partial success
+            color = (255, 255, 0)
 
     # wait for led_control to not be active
     while led_control.active:
@@ -149,8 +155,6 @@ def keyword_handler():
     while led_control.active:
         time.sleep(0.01)
 
-
->>>>>>> 763a6720155b2cb975013691ca66c5d648a5fd0a
 
 # called to determine whether the detector should exit
 def interrupt_callback():

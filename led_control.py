@@ -188,6 +188,7 @@ def ledThread(strip=None, cond):
             condvar.wait()
         if command == "exit":
             return
+
         active = True
         if command == "flash":
             flash(strip, 0.5, getLEDColor(arg0))
