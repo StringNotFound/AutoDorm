@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # External module imports
 import RPi.GPIO as GPIO
 import time

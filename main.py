@@ -5,11 +5,15 @@ import time
 import io
 import pyaudio
 import wave
+import threading
+import thread
 
 # import our custom natural language processing algorithm
 import nlp
 # allows us to execute commands
 import commands
+# controls leds
+import led_control
 
 # Imports the Google Cloud client library
 from google.cloud import speech
@@ -17,6 +21,8 @@ from google.cloud.speech import enums
 from google.cloud.speech import types
 
 interrupt = False
+LEDStrip = 0
+led_cond = 0
 
 # Instantiates a google speech client
 client = speech.SpeechClient()
@@ -91,9 +97,11 @@ def wav2text(file_name):
     else:
         return response.results[0].alternatives[0].transcript;
 
-def get_command():
+def get_cmds():
     file_name = record()
-    return wav2text(file_name)
+    # what the user said
+    spoken_text = wav2text(file_name)
+    cmds = nlp.parse_phrase(spoken_text)
 
 ###########################################################################
 
@@ -104,13 +112,45 @@ def signal_handler(signal, frame):
 
 # called when the keyword is spoken
 def keyword_handler():
+
+    # display the wakeup thing
+    led_control.command = "activate"
+    led_control.arg0 = 0.5
+    led_cond.notify()
+
     print("keyword handler called")
+<<<<<<< HEAD
     #snowboydecoder.play_audio_file()
     raw_text_cmd = get_command()
     cmds = nlp.parse_phrase(raw_text_cmd)
     print(cmds)
     for cmd in cmds:
         commands.execute_command(cmd)
+=======
+
+    # the color is green, initially
+    color = (0, 255, 0)
+    try:
+        cmds = get_cmds()
+        for cmd in cmds:
+            commands.execute_command(cmd)
+    except:
+        # if there's a problem, the color is red
+        color = (255, 0, 0)
+
+    # wait for led_control to not be active
+    while led_control.active:
+        time.sleep(0.01)
+    # we flash the resulting color after executing the commands
+    led_control.command = "flash"
+    led_control.arg0 = color
+    led_cond.notify()
+
+    while led_control.active:
+        time.sleep(0.01)
+
+
+>>>>>>> 763a6720155b2cb975013691ca66c5d648a5fd0a
 
 # called to determine whether the detector should exit
 def interrupt_callback():
@@ -121,11 +161,17 @@ def interrupt_callback():
 def main():
     global interrupt
     global pya
+    global LEDStrip
+    global led_cond
 
     if len(sys.argv) == 1:
         print("Error: need to specify model name")
         print("Usage: python demo.py your.model")
         sys.exit(-1)
+
+    LEDStrip = getStrip()
+    led_cond = threading.Condition()
+    led_thread_id = thread.start_new_thread(led_control.ledThread, (LEDStrip, led_cond))
 
     model = sys.argv[1]
     # capture SIGINT signal, e.g., Ctrl+C
@@ -145,5 +191,9 @@ def main():
 
     print('\nCtrl+C received... exiting')
     detector.terminate()
+
+    led_control.command = "exit"
+    led_cond.notify()
+    led_thread_id.join()
 
 main()
