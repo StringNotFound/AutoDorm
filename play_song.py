@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import thread
 import led_control as led
+from essentia.standard import Loudness
 from neopixel import *
 
 music = 0
@@ -28,14 +29,11 @@ def sick_beats():
     print("stopped playing; exiting secondary thread")
 
 
-def main():
+def play_song(strip, filename):
     global music
+    global current_data
 
-    if len(sys.argv) < 2:
-        print("Plays a wave file.\n\nUsage: %s filename.wav" % sys.argv[0])
-        sys.exit(-1)
-
-    music = wave.open(sys.argv[1], 'rb')
+    music = wave.open(filename, 'rb')
 
     # instantiate PyAudio
     p = pyaudio.PyAudio()
@@ -59,17 +57,23 @@ def main():
     num_beats = beats.shape[1]
     current_beat = 0
 
-    # instantiate a strip (prob pass this in later)
-    strip = led.getStrip()
-
     # how quickly do the beat effects fade (in seconds)?
     fade_time = 1.0
     last_update = 0
     # between 0 and 1
     beat_level = 0
 
+    loudness = Loudness()
+    memory_size = 5
+    prev_vols = np.zeros((memory_size, 1))
+    cur_idx = 0
+
     # wait for stream to finish
     while stream.is_active():
+        cur_volume = loudness(current_data)
+        prev_vols[cur_idx, 1] = cur_volume
+        cur_idx = (cur_idx + 1) % memory_size
+
         if current_beat < num_beats and time.time() - start_time >= beats[0, current_beat] - offset:
             #print("beat! ", beats[1, current_beat])
             beat_level = beats[1, current_beat]
@@ -90,5 +94,15 @@ def main():
 
     # close PyAudio
     p.terminate()
+
+def main():
+    if len(sys.argv) < 2:
+        print("Plays a wave file.\n\nUsage: %s filename.wav" % sys.argv[0])
+        sys.exit(-1)
+
+    # instantiate a strip
+    strip = led.getStrip()
+
+    play_song(strip, sys.argv[1])
 
 main()
