@@ -203,6 +203,10 @@ def setColor(strip, color, end=LED_COUNT):
         strip.setPixelColor(i, color)
     strip.show()
 
+def setRGBColor(strip, color, end=LED_COUNT):
+    color = getLEDColor(color)
+    setColor(strip, color, end)
+
 def flash(strip, duration, color, old_color=Color(0,0,0)):
     setColor(strip, color)
     time.sleep(duration)
@@ -226,9 +230,10 @@ if __name__ == '__main__':
 
     strip = getStrip()
 
-    #jarvis_wake(strip, 0.5)
+    jarvis_wake(strip, 0.5)
     #graphSin(strip)
     #pulse(strip, 5, 2.5, (0, 149, 255), (0, 0, 255))
+    theaterChaseRainbow(strip)
 
     #setColor(strip, Color(0, 0, 0))
     #flash(strip, .25, Color(0, 255, 0))
@@ -237,5 +242,9 @@ if __name__ == '__main__':
         #setBass(strip, i / 255.0)
         #time.sleep(0.01)
     #setBass(strip, 1)
-    setColor(strip, Color(0, 0, 0))
+   # setColor(strip, Color(255, 0, 0))
+    #theaterChaseRainbow(strip)
+    clear(strip)
+
+    #colorWipe(strip, Color(0, 255, 0))
     #testBassColors(strip)

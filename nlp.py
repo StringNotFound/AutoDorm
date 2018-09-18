@@ -1,5 +1,5 @@
-objects = {'leds', 'led', 'color', 'fan', 'volume', 'light', 'lights', 'computer', 'blind', 'blinds', 'shade', 'shades', 'feeling'}
-actions = {'play', 'just-play', 'red', 'orange', 'yellow', 'green', 'blue', 'dark blue', 'purple', 'pink', 'white', 'rainbow', 'off', 'on', 'high', 'low', 'medium', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'close', 'open', 'shut', 'sad', 'happy', 'romantic', 'energetic', 'epic'}
+objects = {'leds', 'led', 'color', 'fan', 'light', 'lights', 'computer', 'feeling'}
+actions = {'play', 'just-play', 'red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'purple', 'pink', 'white', 'rainbow', 'off', 'on', 'high', 'low', 'medium', 'sad', 'happy', 'romantic', 'energetic', 'epic'}
 conjunctions = {'and', 'but'}
 transtive_verbs = {'turn'}
 article_adjs = {'the', 'a', 'an'}

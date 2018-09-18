@@ -108,6 +108,7 @@ def keyword_handler():
     #snowboydecoder.play_audio_file()
     raw_text_cmd = get_command()
     cmds = nlp.parse_phrase(raw_text_cmd)
+    print(cmds)
     for cmd in cmds:
         commands.execute_command(cmd)
 
