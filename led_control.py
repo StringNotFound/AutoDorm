@@ -18,11 +18,10 @@ Valid commands:
     activate (arg0 = sec)
     flash (arg0 = (r, g, b))
 """
-global command = ""
-global arg0
-global arg1
-global condvar
-global active = False
+command = ""
+arg0 = 0
+arg1 = 0
+condvar = 0
 
 # LED strip configuration:
 LED_COUNT      = 243      # Number of LED pixels.
@@ -47,7 +46,6 @@ def jarvis_wake(strip, seconds):
     current_time = start_time
     while current_time - start_time < seconds:
         percentage_done = (current_time - start_time) / float(seconds)
-        print(percentage_done)
         on_left = int(mid - lenl * percentage_done)
         on_right = int(mid + lenl * percentage_done)
         for i in range(on_left, on_right):
@@ -173,32 +171,44 @@ def getStrip():
     return strip
 
 # this thread enables the concurrent led effects
-def ledThread(strip=None, cond):
+def ledThread(cond, strip=None):
     global condvar
     global command
     global arg0
     global arg1
+
+    command = ""
     condvar = cond
     if strip == None:
         strip = getStrip()
 
+    condvar.acquire()
     while True:
         # now we wait for a command
         while command == "":
+            print("LED_THREAD: Waiting for broadcast")
             condvar.wait()
+            print("LED_THREAD: Woken up")
+        print("LED_THREAD: Received command!")
+
         if command == "exit":
+            print("LED_THREAD: exiting...")
             return
 
         active = True
         if command == "flash":
+            print("LED_THREAD: Flash", str(arg0))
             flash(strip, 0.5, getLEDColor(arg0))
         if command == "activate":
+            print("LED_THREAD: Activate")
             jarvis_wake(strip, arg0)
-            pulse(strip, 5, 2.5, (0, 149, 255), (0, 0, 255))
+            #pulse(strip, 5, 2.5, (0, 149, 255), (0, 0, 255))
+        if command == "clear":
+            print("LED_THREAD: Clear")
+            clear(strip)
         command = ""
         arg0 = 0
         arg1 = 0
-        active = False
 
 
 # Main program logic follows:
@@ -209,7 +219,7 @@ if __name__ == '__main__':
     jarvis_wake(strip, 0.5)
     #graphSin(strip)
     #pulse(strip, 5, 2.5, (0, 149, 255), (0, 0, 255))
-    theaterChaseRainbow(strip)
+    #theaterChaseRainbow(strip)
 
     #setColor(strip, Color(0, 0, 0))
     #flash(strip, .25, Color(0, 255, 0))

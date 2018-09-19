@@ -98,10 +98,29 @@ def wav2text(file_name):
         return response.results[0].alternatives[0].transcript;
 
 def get_cmds():
+    print('recording file')
     file_name = record()
+    print('recorded file')
     # what the user said
+    print('converting recorded file to text')
     spoken_text = wav2text(file_name)
+    print(spoken_text)
+    print('parsing text')
     cmds = nlp.parse_phrase(spoken_text)
+    return cmds
+
+def control_lights(command, block, arg0=0, arg1=0):
+    led_control.condvar.acquire()
+    led_control.command = command
+    led_control.arg0 = arg0
+    led_control.arg1 = arg1
+    led_control.condvar.notifyAll()
+    led_control.condvar.release()
+    if block:
+        led_control.condvar.acquire()
+        led_control.condvar.release()
+
+
 
 ###########################################################################
 
@@ -112,11 +131,10 @@ def signal_handler(signal, frame):
 
 # called when the keyword is spoken
 def keyword_handler():
+    global LEDStrip
 
     # display the wakeup thing
-    led_control.command = "activate"
-    led_control.arg0 = 0.5
-    led_cond.notify()
+    control_lights("activate", True, 0.5)
 
     print("keyword handler called")
 
@@ -126,34 +144,27 @@ def keyword_handler():
         cmds = get_cmds()
         num_cmds = len(cmds)
         for cmd in cmds:
-            success = commands.execute_command(cmd)
+            success = commands.execute_command(cmd, LEDStrip)
             if success:
                 successes = successes + 1
-    except:
+    except SyntaxError:
         # if there's a problem with the parsing, it's an automatic failure
-        result = "failure"
+        successes = 0
+        print("failure")
 
     # flash red if we failed
     if successes == 0:
-        color = (255, 0, 0)
-    else:
+        color = (1, 0, 0)
+        control_lights("flash", True, color)
+    #else:
         # flash green if we succeeded
-        if successes == num_cmds:
-            color = (0, 255, 0)
-        else:
+        #if successes == num_cmds:
+            #color = (0, 1, 0)
+        #else:
             # flash yellow for a partial success
-            color = (255, 255, 0)
+            #color = (1, 1, 0)
 
-    # wait for led_control to not be active
-    while led_control.active:
-        time.sleep(0.01)
     # we flash the resulting color after executing the commands
-    led_control.command = "flash"
-    led_control.arg0 = color
-    led_cond.notify()
-
-    while led_control.active:
-        time.sleep(0.01)
 
 
 # called to determine whether the detector should exit
@@ -173,9 +184,12 @@ def main():
         print("Usage: python demo.py your.model")
         sys.exit(-1)
 
-    LEDStrip = getStrip()
+    # initialize the GPIO pins
+    commands.initialize()
+
+    LEDStrip = led_control.getStrip()
     led_cond = threading.Condition()
-    led_thread_id = thread.start_new_thread(led_control.ledThread, (LEDStrip, led_cond))
+    led_thread_id = thread.start_new_thread(led_control.ledThread, (led_cond, LEDStrip))
 
     model = sys.argv[1]
     # capture SIGINT signal, e.g., Ctrl+C
@@ -196,8 +210,9 @@ def main():
     print('\nCtrl+C received... exiting')
     detector.terminate()
 
+    led_control.condvar.acquire()
     led_control.command = "exit"
-    led_cond.notify()
-    led_thread_id.join()
+    led_control.condvar.notify()
+    #led_thread_id.join()
 
 main()

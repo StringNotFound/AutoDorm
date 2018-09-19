@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # External module imports
 import RPi.GPIO as GPIO
 import time
@@ -76,7 +75,7 @@ def toggle_computer():
     global w_comp
 
     GPIO.output(w_comp, GPIO.HIGH)
-    time.sleep(0.5)
+    time.sleep(6)
     GPIO.output(w_comp, GPIO.LOW)
 
 """
