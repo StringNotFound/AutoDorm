@@ -22,7 +22,7 @@ w_motor_2 = 24
 w_power_strip = 22
 
 # other parameters
-light_delay = 0.1
+light_delay = 0.3
 
 def initialize():
     global w_comp
@@ -71,7 +71,14 @@ def set_power_strip(state):
     else:
         GPIO.output(w_power_strip, GPIO.LOW)
 
-def toggle_computer():
+def turn_on_computer():
+    global w_comp
+
+    GPIO.output(w_comp, GPIO.HIGH)
+    time.sleep(1)
+    GPIO.output(w_comp, GPIO.LOW)
+
+def turn_off_computer():
     global w_comp
 
     GPIO.output(w_comp, GPIO.HIGH)
@@ -97,8 +104,11 @@ def execute_command(cmd, strip):
         return False
 
     if obj in {'computer'}:
-        if act in {'off', 'on'}:
-            toggle_computer()
+        if act == 'off':
+            turn_off_computer()
+            return True
+        if act == 'on':
+            turn_on_computer()
             return True
         return False
 

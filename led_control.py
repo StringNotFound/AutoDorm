@@ -33,8 +33,8 @@ LED_BRIGHTNESS = 255     # Set to 0 for darkest and 255 for brightest
 LED_INVERT     = False   # True to invert the signal (when using NPN transistor level shift)
 LED_CHANNEL    = 0       # set to '1' for GPIOs 13, 19, 41, 45 or 53
 
-L = 100
-R = 143
+L = 89
+R = 148
 mid = (L + R) / 2
 
 def jarvis_wake(strip, seconds):
@@ -49,7 +49,6 @@ def jarvis_wake(strip, seconds):
         on_left = int(mid - lenl * percentage_done)
         on_right = int(mid + lenl * percentage_done)
         for i in range(on_left, on_right):
-            dist = min(i - on_left, abs(i - mid), on_right - i);
             strip.setPixelColor(i, Color(0, 0, 255))
         # make the strip softer
         for i in range(on_left, 30):
@@ -59,6 +58,24 @@ def jarvis_wake(strip, seconds):
     for i in range(L, R):
         strip.setPixelColor(i, Color(0, 0, 255))
     strip.show()
+
+def jarvis_sleep(strip, seconds):
+    L = 0
+    R = LED_COUNT
+    lenl = mid - L
+    lenr = mid - R
+    start_time = time.time()
+    current_time = start_time
+    while current_time - start_time < seconds:
+        percentage_done = (current_time - start_time) / float(seconds)
+        off_left = int(lenl * percentage_done)
+        off_right = int(lenr * percentage_done)
+        for i in range(L, off_left):
+            strip.setPixelColor(i, Color(0, 0, 0))
+        for i in range(R-off_left, R+1):
+            strip.setPixelColor(i, Color(0, 0, 0))
+        strip.show()
+        current_time = time.time()
 
 def blobs(strip, blob_speed, background_color, blob_color, num_blobs=3):
     pass
@@ -118,6 +135,9 @@ def getBassColor(amt):
 
 # amt \in [0 1]
 def setBass(strip, amt):
+    global L
+    global R
+
     amt = min(1, amt)
     print(amt)
     lenr = LED_COUNT - R
@@ -137,6 +157,21 @@ def setBass(strip, amt):
         strip.setPixelColor(i, color)
     strip.show()
 
+# amt \in [0 1]
+def setTop(strip, amt):
+    global L
+    global R
+    global mid
+
+    amt = min(1, amt)
+
+    lenmid = int(amt * (R - L))
+    color = getBassColor(amt)
+
+    for i in range(int(mid - lenmid / 2), int(mid + lenmid / 2)):
+        strip.setPixelColor(i, color)
+    strip.show()
+
 def testBassColors(strip):
     clear(strip)
     for i in range(0, L):
@@ -153,7 +188,9 @@ def setRGBColor(strip, color, end=LED_COUNT):
     color = getLEDColor(color)
     setColor(strip, color, end)
 
-def flash(strip, duration, color, old_color=Color(0,0,0)):
+def flash(strip, duration, color, old_color=(0,0,0)):
+    color = getLEDColor(color)
+    old_color = getLEDColor(old_color)
     setColor(strip, color)
     time.sleep(duration)
     setColor(strip, old_color)
@@ -171,6 +208,7 @@ def getStrip():
     return strip
 
 # this thread enables the concurrent led effects
+# (currently unused)
 def ledThread(cond, strip=None):
     global condvar
     global command
@@ -216,7 +254,10 @@ if __name__ == '__main__':
 
     strip = getStrip()
 
-    jarvis_wake(strip, 0.5)
+    #jarvis_wake(strip, 0.5)
+    setBass(strip, 1)
+    setTop(strip, 1)
+    #jarvis_sleep(strip, 0.5)
     #graphSin(strip)
     #pulse(strip, 5, 2.5, (0, 149, 255), (0, 0, 255))
     #theaterChaseRainbow(strip)
@@ -227,7 +268,6 @@ if __name__ == '__main__':
     #for i in range(255):
         #setBass(strip, i / 255.0)
         #time.sleep(0.01)
-    #setBass(strip, 1)
    # setColor(strip, Color(255, 0, 0))
     #theaterChaseRainbow(strip)
     clear(strip)

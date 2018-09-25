@@ -22,7 +22,6 @@ from google.cloud.speech import types
 
 interrupt = False
 LEDStrip = 0
-led_cond = 0
 
 # Instantiates a google speech client
 client = speech.SpeechClient()
@@ -109,18 +108,6 @@ def get_cmds():
     cmds = nlp.parse_phrase(spoken_text)
     return cmds
 
-def control_lights(command, block, arg0=0, arg1=0):
-    led_control.condvar.acquire()
-    led_control.command = command
-    led_control.arg0 = arg0
-    led_control.arg1 = arg1
-    led_control.condvar.notifyAll()
-    led_control.condvar.release()
-    if block:
-        led_control.condvar.acquire()
-        led_control.condvar.release()
-
-
 
 ###########################################################################
 
@@ -134,38 +121,18 @@ def keyword_handler():
     global LEDStrip
 
     # display the wakeup thing
-    control_lights("activate", True, 0.5)
+    led_control.jarvis_wake(LEDStrip, 0.5)
 
     print("keyword handler called")
 
-    num_cmds = 0
-    successes = 0
     try:
         cmds = get_cmds()
-        num_cmds = len(cmds)
+        led_control.jarvis_sleep(LEDStrip, 0.5)
         for cmd in cmds:
-            success = commands.execute_command(cmd, LEDStrip)
-            if success:
-                successes = successes + 1
+            commands.execute_command(cmd, LEDStrip)
     except SyntaxError:
         # if there's a problem with the parsing, it's an automatic failure
-        successes = 0
-        print("failure")
-
-    # flash red if we failed
-    if successes == 0:
-        color = (1, 0, 0)
-        control_lights("flash", True, color)
-    #else:
-        # flash green if we succeeded
-        #if successes == num_cmds:
-            #color = (0, 1, 0)
-        #else:
-            # flash yellow for a partial success
-            #color = (1, 1, 0)
-
-    # we flash the resulting color after executing the commands
-
+        led_control.flash(LEDStrip, 0.5, (1, 0, 0))
 
 # called to determine whether the detector should exit
 def interrupt_callback():
@@ -188,8 +155,6 @@ def main():
     commands.initialize()
 
     LEDStrip = led_control.getStrip()
-    led_cond = threading.Condition()
-    led_thread_id = thread.start_new_thread(led_control.ledThread, (led_cond, LEDStrip))
 
     model = sys.argv[1]
     # capture SIGINT signal, e.g., Ctrl+C
@@ -210,9 +175,5 @@ def main():
     print('\nCtrl+C received... exiting')
     detector.terminate()
 
-    led_control.condvar.acquire()
-    led_control.command = "exit"
-    led_control.condvar.notify()
-    #led_thread_id.join()
 
 main()
