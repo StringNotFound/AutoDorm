@@ -119,6 +119,7 @@ def signal_handler(signal, frame):
 # called when the keyword is spoken
 def keyword_handler():
     global LEDStrip
+    global pya
 
     # display the wakeup thing
     led_control.jarvis_wake(LEDStrip, 0.5)
@@ -129,7 +130,7 @@ def keyword_handler():
         cmds = get_cmds()
         led_control.jarvis_sleep(LEDStrip, 0.5)
         for cmd in cmds:
-            commands.execute_command(cmd, LEDStrip)
+            commands.execute_command(cmd, LEDStrip, pya)
     except SyntaxError:
         # if there's a problem with the parsing, it's an automatic failure
         led_control.flash(LEDStrip, 0.5, (1, 0, 0))

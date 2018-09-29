@@ -5,19 +5,25 @@ import sys
 import numpy as np
 import thread
 import led_control as led
-from essentia.standard import Loudness
 from neopixel import *
 import math
 import random
 import colorsys
+import audioop
+from multiprocessing import Process, Array, Value
+import os
 
-music = 0
-current_data = 0
-prev_vols = 0
 strip_arr = np.zeros((led.LED_COUNT, 3))
+strip = None
 
 # a dummy class to store state
 class State:
+    color = 0
+    isOn = False
+
+    beatLevel = 0
+    fadeTime = 0
+
     def __init__(self):
         pass
 
@@ -40,13 +46,10 @@ class Blob:
         self.acceleration = acceleration
 
 def UpdateBlobs(blobs, deltaTime):
-    print("updating blobs")
     for blob in blobs:
         blob.velocity += blob.acceleration * deltaTime
         blob.start += blob.velocity * deltaTime
-        print("new start:", blob.start)
         blob.end += blob.velocity * deltaTime
-        print("new end:", blob.end)
         if blob.color_fun is not None:
             blob.color = blob.color_fun(blob, deltaTime)
         if blob.opacity_decay_time > 0:
@@ -93,13 +96,6 @@ def DrawBlobs(blobs, strip, background_color=(0,0,0)):
 def decayFunction(x):
     return 1 / (1 + math.exp(-((256 * x / 21) - 6)))
 
-# this method is called when the audio stream needs more data
-def callback(in_data, frame_count, time_info, status):
-    global music
-    global current_data
-    data = music.readframes(frame_count)
-    current_data = data
-    return (data, pyaudio.paContinue)
 
 ################### song visualizers ##########################
 
@@ -108,7 +104,7 @@ def callback(in_data, frame_count, time_info, status):
 # delta_time - the time since this function was last called
 # blobs - the set of all blobs
 # state - the state returned by the last call to FairyUpdateHandler (or FairyBeatHandler)
-def FairyUpdateHandler(delta_time, blobs, state):
+def FairyUpdateHandler(delta_time, avg_vol, blobs, state):
     global strip
 
     UpdateBlobs(blobs, delta_time)
@@ -131,14 +127,15 @@ def FairyBeatHandler(beat_duration, beat_intensity, blobs, state):
     num_blobs = int(60 * beat_intensity)
     for _ in range(num_blobs):
         posn = random.randint(0, led.LED_COUNT)
-        color = colors[random.randint(0, len(colors)-1)]
+        #color = colors[random.randint(0, len(colors)-1)]
+        color = (1, 0, 0)
         blob = Blob(color, posn, posn)
         blob.opacity = random.uniform(0.7, 1)
         blob.opacity_decay_time = beat_duration * random.uniform(0.7, 1.1)
         blobs.append(blob)
     return blobs, state
 
-def StrobeUpdateHandler(delta_time, blobs, state):
+def StrobeUpdateHandler(delta_time, avg_vol, blobs, state):
     global strip
 
     if state is None:
@@ -157,29 +154,31 @@ def StrobeUpdateHandler(delta_time, blobs, state):
     for i in range(led.LED_COUNT):
         strip.setPixelColor(i, color)
     strip.show()
+    return blobs, state
 
 def StrobeBeatHandler(beat_duration, beat_intensity, blobs, state):
     state.color = getNextColor(state.color)
     return (blobs, state)
 
-def LevelsUpdateHandler(delta_time, blobs, state):
+def LevelsUpdateHandler(delta_time, avg_vol, blobs, state):
     global strip
 
     if state is None:
         state = State()
         state.beatLevel = 0
-        state.fadeTime = 1
-    state.beatLevel -= delta_time / state.fadeTime
+        state.fadeTime = 5.0
+    state.beatLevel = state.beatLevel - (delta_time / state.fadeTime)
     state.beatLevel = max(0, state.beatLevel)
-    led.setBass(strip, beat_level)
-    led.setTop(strip, np.mean(prev_vols))
+    # set (top, bot)
+    led.setLevels(strip, avg_vol, state.beatLevel)
+    return blobs, state
 
 def LevelsBeatHandler(beat_duration, beat_intensity, blobs, state):
     state.beatLevel = beat_intensity
     state.fadeTime = beat_duration
     return (blobs, state)
 
-def PulseUpdateHandler(delta_time, blobs, state):
+def PulseUpdateHandler(delta_time, avg_vol, blobs, state):
     global strip
 
     if state is None:
@@ -203,8 +202,82 @@ def getNextColor(c):
 
 #################### "main" methods ###########################
 
+# NOTE: These variables are only accurate in the playAudio child process
+# the last time the callback was called
+last_update = 0
+# the number of frames that we've read
+num_frames = 0
+# the wav music file
+music = None
+# the pipe
+pipe = None
+
+# callback is used in playAudio
+def callback(in_data, frame_count, time_info, status):
+    global last_update
+    global num_frames
+    global music
+    global pipe
+
+    num_frames = num_frames + frame_count
+    last_update = time.time()
+    pipe.value = num_frames / 1024
+
+    data = music.readframes(frame_count)
+    return (data, pyaudio.paContinue)
+
+def playAudio(wave_stream, pya, cur_vol_idx):
+    global last_update
+    global num_frames
+    global music
+    global pipe
+    # set the thread priority quite high
+    os.nice(-19)
+
+    music = wave_stream
+    pipe = cur_vol_idx
+
+    # open stream
+    stream = pya.open(format=pya.get_format_from_width(music.getsampwidth()),
+                    channels=music.getnchannels(),
+                    rate=music.getframerate(),
+                    output=True,
+                    stream_callback=callback)
+    stream.start_stream()
+
+    # the number of frames that we've read
+    while stream.is_active():
+        time.sleep(0.05)
+        #cur_vol_idx.value = num_frames / 1024
+        # the stream sometimes hangs. We need to restart it
+        if time.time() - last_update > 0.1:
+            print("restarting stream!")
+            stream.close()
+            stream = pya.open(format=pya.get_format_from_width(music.getsampwidth()),
+                            channels=music.getnchannels(),
+                            rate=music.getframerate(),
+                            output=True,
+                            stream_callback=callback)
+            stream.start_stream()
+
+
+    # stop stream
+    stream.stop_stream()
+    stream.close()
+
+# given a music file, returns the volume at every 1024 frames
+def getAllVols(music):
+    vols = []
+    num_frames = 1024
+    data = music.readframes(num_frames)
+    while len(data) > 0:
+        vols.append(audioop.rms(data, 2))
+        data = music.readframes(num_frames)
+    return vols
+
 def getHandler(intensity):
-    low_intensity = [(PulseBeatHandler, PulseUpdateHandler), (FairyBeatHandler, FairyUpdateHandler)]
+    #low_intensity = [(PulseBeatHandler, PulseUpdateHandler), (FairyBeatHandler, FairyUpdateHandler)]
+    low_intensity = [(FairyBeatHandler, FairyUpdateHandler)]
     mid_intensity = [(LevelsBeatHandler, LevelsUpdateHandler)]
     high_intensity = [(StrobeBeatHandler, StrobeUpdateHandler)]
 
@@ -219,87 +292,74 @@ def getHandler(intensity):
 # strip: a reference to the strip object
 # filename: the filepath of the song to play
 # beat_file: the filepath containing the stored beats of the song
-def play_song(strip, song_file, beat_file):
-    global music
-    global current_data
-    global prev_vols
+def play_song(strip, song_name, pya):
 
-    music = wave.open(song_file, 'rb')
-    beat_file = open(beat_file)
+    music = wave.open('music/' + song_file + '.wav', 'rb')
+    vols = np.array(getAllVols(music))
+    # normalize
+    vols = vols / float(np.max(vols))
+    # getAllVols uses up music, so we need to reopen the file
+    music = wave.open('music/' + song_file + '.wav', 'rb')
+    framerate = music.getframerate()
+
+    beat_file = open('music/' + song_file + '.txt')
     beats = [float(x.strip()) for x in beat_file]
 
-    # instantiate PyAudio
-    p = pyaudio.PyAudio()
-
-    # open stream using callback
-    stream = p.open(format=p.get_format_from_width(music.getsampwidth()),
-                    channels=music.getnchannels(),
-                    rate=music.getframerate(),
-                    output=True,
-                    stream_callback=callback)
-
-    # start the stream
-    stream.start_stream()
     start_time = time.time()
-
-    # the offset of the beats (in seconds)
-    offset = 0.00
-
     last_update = start_time
 
-    loudness = Loudness()
     memory_size = 5
-    prev_vols = [0 for _ in range(memory_size)]
-    cur_idx = 0
     cur_beat_idx = 0
+    offset = 0
 
     beatHandler = None
     updateHandler = None
     blobs = []
     state = None
 
-    # wait for stream to finish
-    while stream.is_active():
-        continue
-        cur_volume = loudness(current_data)
-        prev_vols[cur_idx, 1] = cur_volume
-        cur_idx = (cur_idx + 1) % memory_size
+    cur_vol_idx = Value('i', 0)
+    audioProc = Process(target=playAudio, args=(music, pya, cur_vol_idx))
+    audioProc.start()
 
-        deltaTime = time.time() - last_update
-        last_update += deltaTime
+    # wait for stream to finish
+    while cur_beat_idx < len(beats) and cur_vol_idx.value + 1 < vols.shape[0]:
+        delta_time = time.time() - last_update
+        last_update += delta_time
 
         if beatHandler is None or updateHandler is None:
-            getHandler(0)
+            (beatHandler, updateHandler) = getHandler(0)
 
-        updateHandler(delta_time, blobs, state)
+        (blobs, state) = updateHandler(delta_time, vols[cur_vol_idx.value], blobs, state)
 
-        if cur_beat_idx < len(beats) and time.time() - start_time >= beats[cur_beat_idx] - offset:
+        music_time = cur_vol_idx.value * 1024.0 / framerate
+        if music_time >= beats[cur_beat_idx] + offset:
+            #print("beat")
             cur_beat_idx += 1
             # if this isn't the last beat
             if cur_beat_idx + 1 < len(beats):
-                beatHandler(beats[cur_beat_idx + 1] - beats[cur_beat_idx], max(prev_vols), blobs, state)
+                (blobs, state) = beatHandler(beats[cur_beat_idx + 1] - beats[cur_beat_idx],
+                                             np.max(vols[max(cur_vol_idx.value - 5, 0):cur_vol_idx.value+1]), blobs, state)
             else:
-                beatHandler(1, max(prev_vols), blobs, state)
+                (blobs, state) = beatHandler(1, np.max(vols[max(cur_vol_idx.value - 5, 0):cur_vol_idx.value]), blobs, state)
 
-        time.sleep(0.001)
+        time.sleep(0.01)
 
-    # stop stream
-    stream.stop_stream()
-    stream.close()
-    music.close()
-
-    # close PyAudio
-    p.terminate()
+    audioProc.join()
 
 def main():
+    global strip
+
     if len(sys.argv) < 2:
-        print("Plays a wave file.\n\nUsage: %s filename.wav beat_file.txt" % sys.argv[0])
+        print("Plays a wave file.\n\nUsage: %s song_name" % sys.argv[0])
         sys.exit(-1)
 
     # instantiate a strip
     strip = led.getStrip()
 
-    play_song(strip, sys.argv[1], sys.argv[2])
+    # instantiate pyaudio
+    p = pyaudio.PyAudio()
+
+    play_song(strip, sys.argv[1], p)
 
 def test_blobs():
     print("testing blobs...")

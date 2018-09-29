@@ -2,6 +2,7 @@
 import RPi.GPIO as GPIO
 import time
 import led_control as ledc
+from play_song import play_song
 
 """
 Pin list:
@@ -89,7 +90,7 @@ def turn_off_computer():
 Given an (object, action) pair, attempts to execute the command. May throw an
 error if the pairing is invalid or the command is not successfully executed
 """
-def execute_command(cmd, strip):
+def execute_command(cmd, strip, pya):
     print(cmd)
     obj = cmd[0]
     act = cmd[1]
@@ -101,7 +102,6 @@ def execute_command(cmd, strip):
         if act == 'on':
             turn_on_lights()
             return True
-        return False
 
     if obj in {'computer'}:
         if act == 'off':
@@ -110,7 +110,6 @@ def execute_command(cmd, strip):
         if act == 'on':
             turn_on_computer()
             return True
-        return False
 
     if obj in {'fan'}:
         if act == 'off':
@@ -119,7 +118,6 @@ def execute_command(cmd, strip):
         if act == 'on':
             set_power_strip(True)
             return True
-        return False
 
     if obj in {'leds', 'led'}:
         if act == 'off':
@@ -154,4 +152,13 @@ def execute_command(cmd, strip):
         if act == 'white':
             ledc.setRGBColor(strip, (1, 1, 1))
             return True
-        return False
+
+    if obj in {'play'}:
+        if act == 'thunder struck':
+            play_song(strip, 'thunder_struck', pya)
+            return True
+        if act == 'sweet dreams':
+            play_song(strip, 'sweet_dreams', pya)
+            return True
+
+    return False

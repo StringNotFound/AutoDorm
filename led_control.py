@@ -134,42 +134,35 @@ def getBassColor(amt):
     return getLEDColor(c)
 
 # amt \in [0 1]
-def setBass(strip, amt):
-    global L
-    global R
-
-    amt = min(1, amt)
-    print(amt)
-    lenr = LED_COUNT - R
-
-    left = int(amt * L)
-    right = LED_COUNT - int(amt * lenr)
-
-    color = getBassColor(amt)
-
-    for i in range(0, left):
-        #color = getBassColor(amt * float(i) / left)
-        strip.setPixelColor(i, color)
-    for i in range(left, right):
-        strip.setPixelColor(i, Color(0, 0, 0))
-    for i in range(right, LED_COUNT):
-        #color = getBassColor(amt * float(LED_COUNT - i) / lenr)
-        strip.setPixelColor(i, color)
-    strip.show()
-
-# amt \in [0 1]
-def setTop(strip, amt):
+def setLevels(strip, top, bot):
     global L
     global R
     global mid
 
-    amt = min(1, amt)
+    top = min(1, top)
+    bot = min(1, bot)
 
-    lenmid = int(amt * (R - L))
-    color = getBassColor(amt)
+    lenr = LED_COUNT - R
+    left = int(bot * L)
+    right = LED_COUNT - int(bot * lenr)
+
+    bassColor = getBassColor(bot)
+    off = Color(0, 0, 0)
+
+    for i in range(0, left):
+        #color = getBassColor(amt * float(i) / left)
+        strip.setPixelColor(i, bassColor)
+    for i in range(left, right):
+        strip.setPixelColor(i, off)
+    for i in range(right, LED_COUNT):
+        #color = getBassColor(amt * float(LED_COUNT - i) / lenr)
+        strip.setPixelColor(i, bassColor)
+
+    lenmid = int(top * (R - L))
+    topColor = getBassColor(top)
 
     for i in range(int(mid - lenmid / 2), int(mid + lenmid / 2)):
-        strip.setPixelColor(i, color)
+        strip.setPixelColor(i, topColor)
     strip.show()
 
 def testBassColors(strip):
@@ -255,8 +248,8 @@ if __name__ == '__main__':
     strip = getStrip()
 
     #jarvis_wake(strip, 0.5)
-    setBass(strip, 1)
-    setTop(strip, 1)
+    #setBass(strip, 1)
+    #setLevels(strip, 0.1, 0.1)
     #jarvis_sleep(strip, 0.5)
     #graphSin(strip)
     #pulse(strip, 5, 2.5, (0, 149, 255), (0, 0, 255))
