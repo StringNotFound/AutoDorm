@@ -29,6 +29,7 @@ class State:
 
 class Blob:
     acceleration = 0
+    # LED/sec
     velocity = 0
     color = (0, 0, 0)
     color_fun = None
@@ -55,11 +56,17 @@ def UpdateBlobs(blobs, deltaTime):
         if blob.opacity_decay_time > 0:
             blob.opacity = max(0, blob.opacity - (deltaTime / blob.opacity_decay_time))
 
-def DrawBlobs(blobs, strip, background_color=(0,0,0)):
+def DrawBlobs(blobs, strip, background_color=(0,0,0), show=True):
     strip_arr[:, :] = background_color
     for blob in blobs:
-        if blob.start < 0 or blob.end > led.LED_COUNT:
-            continue
+        if blob.start < 0:
+            blob.start = 0
+        if blob.end >= led.LED_COUNT:
+            blob.end = led.LED_COUNT - 1
+        if blob.end < 0:
+            blob.end = 0
+        if blob.start >= led.LED_COUNT:
+            blob.start = led.LED_COUNT - 1
         start_int = int(math.ceil(blob.start))
         end_int = int(blob.end)
         color = (blob.color[0] * blob.opacity, blob.color[1] * blob.opacity, blob.color[2] * blob.opacity)
@@ -90,7 +97,8 @@ def DrawBlobs(blobs, strip, background_color=(0,0,0)):
     # display everthing
     for i in range(led.LED_COUNT):
         strip.setPixelColor(i, led.getLEDColor(tuple(strip_arr[i, :])))
-    strip.show()
+    if show:
+        strip.show()
 
 # given an intensity in the range [0, 1], uses weber-fechner's law to bring it into visually linear color space
 def decayFunction(x):
@@ -144,20 +152,52 @@ def StrobeUpdateHandler(delta_time, avg_vol, blobs, state):
         state.isOn = True
 
     if state.isOn:
-        color = led.getLEDColor(state.color)
+        color = state.color
         state.isOn = False
     else:
-        color = led.getLEDColor((0, 0, 0))
+        color = (0, 0, 0)
         state.isOn = True
 
-    color = led.getLEDColor((0, 0, 0))
-    for i in range(led.LED_COUNT):
-        strip.setPixelColor(i, color)
-    strip.show()
+    led.setRGBColor(strip, color)
     return blobs, state
 
 def StrobeBeatHandler(beat_duration, beat_intensity, blobs, state):
     state.color = getNextColor(state.color)
+    print(state.color)
+    return (blobs, state)
+
+def ShootUpdateHandler(delta_time, avg_vol, blobs, state):
+    global strip
+
+    if state is None:
+        state = State()
+        state.color = (0, 0, 1)
+    blobs = [b for b in blobs if b.end != b.start]
+    UpdateBlobs(blobs, delta_time)
+    DrawBlobs(blobs, strip, False)
+    led.setInvTop(strip, avg_vol)
+    return blobs, state
+
+def ShootBeatHandler(beat_duration, beat_intensity, blobs, state):
+    # first, remove the old blobs
+    #blobs = [b for b in blobs if b.end != b.start]
+    #blobs = [b for b in blobs if b.opacity > 0]
+
+    if beat_intensity < 0.02:
+        return (blobs, state)
+
+    color = led.getBassColor(beat_intensity)
+    size = 12 - 9 * beat_intensity
+    speedL = led.L / beat_duration * beat_intensity
+    speedR = (led.LED_COUNT - led.R) / beat_duration * beat_intensity
+    # now create the two blobs that represent this beat (one for either side)
+    leftBeatBlob = Blob(color, led.L - size, led.L, -speedL)
+    #leftBeatBlob.opacity_decay_time = beat_duration
+    rightBeatBlob = Blob(color, led.R, led.R + size, speedR)
+    #rightBeatBlob.opacity_decay_time = beat_duration
+
+    blobs.append(leftBeatBlob)
+    blobs.append(rightBeatBlob)
     return (blobs, state)
 
 def LevelsUpdateHandler(delta_time, avg_vol, blobs, state):
@@ -198,7 +238,7 @@ def PulseBeatHandler(beat_duration, beat_intensity, blobs, state):
 
 def getNextColor(c):
     hsv = colorsys.rgb_to_hsv(c[0], c[1], c[2])
-    return colorsys.hsv_to_rgb(hsv[0] + 1/6, hsv[1], hsv[2])
+    return colorsys.hsv_to_rgb(hsv[0] + 1/6.0, hsv[1], hsv[2])
 
 #################### "main" methods ###########################
 
@@ -287,22 +327,27 @@ def getHandler(intensity):
         return mid_intensity[random.randint(0, len(mid_intensity)-1)]
     if intensity == 1:
         return high_intensity[random.randint(0, len(high_intensity)-1)]
+    if intensity == 2:
+        return (ShootBeatHandler, ShootUpdateHandler)
 
 # call this method to play a song
 # strip: a reference to the strip object
 # filename: the filepath of the song to play
 # beat_file: the filepath containing the stored beats of the song
-def play_song(strip, song_name, pya):
+def play_song(strip_a, song_name, pya):
+    global strip
 
-    music = wave.open('music/' + song_file + '.wav', 'rb')
+    strip = strip_a
+
+    music = wave.open('music/' + song_name + '.wav', 'rb')
     vols = np.array(getAllVols(music))
     # normalize
     vols = vols / float(np.max(vols))
     # getAllVols uses up music, so we need to reopen the file
-    music = wave.open('music/' + song_file + '.wav', 'rb')
+    music = wave.open('music/' + song_name + '.wav', 'rb')
     framerate = music.getframerate()
 
-    beat_file = open('music/' + song_file + '.txt')
+    beat_file = open('music/' + song_name + '.txt')
     beats = [float(x.strip()) for x in beat_file]
 
     start_time = time.time()
@@ -377,4 +422,4 @@ def test_blobs():
         UpdateBlobs(blobs, delta_time)
         DrawBlobs(blobs, strip)
 
-main()
+#main()

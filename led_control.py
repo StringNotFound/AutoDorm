@@ -24,7 +24,7 @@ arg1 = 0
 condvar = 0
 
 # LED strip configuration:
-LED_COUNT      = 243      # Number of LED pixels.
+LED_COUNT      = 238      # Number of LED pixels.
 LED_PIN        = 18      # GPIO pin connected to the pixels (18 uses PWM!).
 #LED_PIN        = 10      # GPIO pin connected to the pixels (10 uses SPI /dev/spidev0.0).
 LED_FREQ_HZ    = 800000  # LED signal frequency in hertz (usually 800khz)
@@ -76,6 +76,7 @@ def jarvis_sleep(strip, seconds):
             strip.setPixelColor(i, Color(0, 0, 0))
         strip.show()
         current_time = time.time()
+    clear(strip)
 
 def blobs(strip, blob_speed, background_color, blob_color, num_blobs=3):
     pass
@@ -126,12 +127,13 @@ def getHue(amt, startHue, endHue):
     return hue
 
 # amt \in [0, 1]
+# returns an rgb tuple
 def getBassColor(amt):
     sat = 1
     if amt > .9:
         sat = 1 - (amt - 0.9) / 0.1
     c = colorsys.hsv_to_rgb(getHue(amt, 2/3.0, 1/6.0), sat, 1)
-    return getLEDColor(c)
+    return c
 
 # amt \in [0 1]
 def setLevels(strip, top, bot):
@@ -146,7 +148,7 @@ def setLevels(strip, top, bot):
     left = int(bot * L)
     right = LED_COUNT - int(bot * lenr)
 
-    bassColor = getBassColor(bot)
+    bassColor = getLEDColor(getBassColor(bot))
     off = Color(0, 0, 0)
 
     for i in range(0, left):
@@ -159,17 +161,32 @@ def setLevels(strip, top, bot):
         strip.setPixelColor(i, bassColor)
 
     lenmid = int(top * (R - L))
-    topColor = getBassColor(top)
+    topColor = getLEDColor(getBassColor(top))
 
     for i in range(int(mid - lenmid / 2), int(mid + lenmid / 2)):
         strip.setPixelColor(i, topColor)
     strip.show()
 
-def testBassColors(strip):
-    clear(strip)
-    for i in range(0, L):
-        color = getBassColor(float(i) / L)
+def setInvTop(strip, amt):
+    global L
+    global R
+    global mid
+
+    amt = min(1, amt)
+
+    lenl = int(amt * (mid - L))
+    lenr = int(amt * (R - mid))
+
+    color = getLEDColor(getBassColor(amt))
+    off = Color(0, 0, 0)
+
+    for i in range(L, L + lenl):
         strip.setPixelColor(i, color)
+    for i in range(L + lenl, R - lenr):
+        strip.setPixelColor(i, off)
+    for i in range(R - lenr, R):
+        strip.setPixelColor(i, color)
+
     strip.show()
 
 def setColor(strip, color, end=LED_COUNT):

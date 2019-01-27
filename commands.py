@@ -23,7 +23,7 @@ w_motor_2 = 24
 w_power_strip = 22
 
 # other parameters
-light_delay = 0.3
+light_delay = 0.5
 
 def initialize():
     global w_comp
@@ -45,10 +45,10 @@ def turn_on_lights():
 
     GPIO.output(w_motor_1, GPIO.LOW)
     GPIO.output(w_motor_2, GPIO.HIGH)
-    time.sleep(light_delay)
+    time.sleep(light_delay + 0.2)
     GPIO.output(w_motor_1, GPIO.HIGH)
     GPIO.output(w_motor_2, GPIO.LOW)
-    time.sleep(light_delay)
+    time.sleep(0.5 * light_delay)
     GPIO.output(w_motor_1, GPIO.LOW)
 
 def turn_off_lights():
@@ -61,13 +61,13 @@ def turn_off_lights():
     time.sleep(light_delay)
     GPIO.output(w_motor_2, GPIO.HIGH)
     GPIO.output(w_motor_1, GPIO.LOW)
-    time.sleep(light_delay)
+    time.sleep(0.5 * light_delay)
     GPIO.output(w_motor_2, GPIO.LOW)
 
 def set_power_strip(state):
     global w_power_strip
 
-    if state == True:
+    if state != True:
         GPIO.output(w_power_strip, GPIO.HIGH)
     else:
         GPIO.output(w_power_strip, GPIO.LOW)
@@ -154,7 +154,7 @@ def execute_command(cmd, strip, pya):
             return True
 
     if obj in {'play'}:
-        if act == 'thunder struck':
+        if act in {'thunder struck', 'thunderstruck'}:
             play_song(strip, 'thunder_struck', pya)
             return True
         if act == 'sweet dreams':
